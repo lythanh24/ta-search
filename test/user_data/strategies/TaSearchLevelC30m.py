@@ -70,6 +70,38 @@ class TaSearchLevelC30m(IStrategy):
 
         return df
 
+    def do_long_refactor(self, df: pd.DataFrame) -> pd.DataFrame:
+        n = 200
+        df['level_max'] = 0  # Initialize the signal column
+        df['buy_min'] = np.nan  # Initialize with NaN for clarity
+    
+        # STEP 1: Find ALL local minima once
+        local_min_indices = signal.argrelextrema(df['close'].values, np.less_equal, order=n)[0]
+        df.loc[local_min_indices, 'buy_min'] = df.loc[local_min_indices, 'close']
+    
+        # STEP 2: Extract all local minima points as a DataFrame
+        buy_min_df = df.loc[local_min_indices].copy()
+    
+        # STEP 3: Iterate through all local minima
+        for idx, current_row in buy_min_df.iterrows():
+            current_close = current_row['close']
+    
+            # Only compare to previous local mins
+            previous_lows = buy_min_df.loc[buy_min_df.index < idx]
+    
+            for prev_idx, prev_row in previous_lows.iterrows():
+                prev_close = prev_row['close']
+                diff = self.diff_percentage(prev_close, current_close)
+    
+                if diff < 0.5:
+                    # If match found, mark next candle if it exists
+                    if idx + 1 < len(df):
+                        df.at[idx + 1, 'level_max'] = 1
+                    break  # One match is enough; stop early
+    
+        return df
+
+    
     def do_short(self, df: pd.DataFrame) -> pd.DataFrame:
         n = 200
         df['buy_max'] = df.iloc[signal.argrelextrema(df.close.values, np.greater_equal, order=n)[0]]['close']
